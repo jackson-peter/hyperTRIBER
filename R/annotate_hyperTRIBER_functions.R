@@ -1,15 +1,15 @@
 getHits <- function(res,stranded=F,fdr=0.1,fold=2,ncore=20,addMeta=TRUE,data_list,edits_of_interest=rbind(c("A","G"),c("T","C")),design_vector=c(rep("control",5),rep("treat",5)),include_ref=T,refGR=locsGR,symm=F)
 {
-
+  
   #filter by edits of interest
   targs <- gsub("E(.)","\\1",res$featureID)
   res <- res[grep(paste(unique(edits_of_interest[,2]),collapse="|"),res$featureID),]
   #res.sig <- res[intersect(which(res$padj<fdr), which(res$log2fold_treat_control>fold)),]
   res.sig <- res[which(res$padj<=fdr),]
   my.hits <- unique(res.sig$groupID)
-
+  
   print(paste("number of hits = ",length(my.hits)))
-
+  
   if(stranded)
   {
     my.chrs <- gsub(("(.+)\\_[0-9]+,[+|-]"),"\\1",my.hits)
@@ -22,7 +22,7 @@ getHits <- function(res,stranded=F,fdr=0.1,fold=2,ncore=20,addMeta=TRUE,data_lis
     my.pos <- as.numeric(as.vector(gsub((".+\\_([0-9]+)"),"\\1",my.hits)))
     posGR <- GRanges(Rle(my.chrs),IRanges(my.pos,my.pos))
     names(posGR) <- my.hits
-
+    
     if(!addMeta)
     {
       res.sig <- res.sig[order(res.sig$padj),]
@@ -30,22 +30,22 @@ getHits <- function(res,stranded=F,fdr=0.1,fold=2,ncore=20,addMeta=TRUE,data_lis
       posGR$edit_base <- 0
       posGR[names(edit_base)]$edit_base <- gsub("E","",edit_base)
     }
-
+    
   }
-
-
+  
+  
   if(addMeta){
-
+    
     "adding meta..."
-
+    
     registerDoParallel(cores=ncore)
-
+    
     #meta <- list()
     meta <- foreach(i=1:length(posGR)) %dopar% {
       tmp <- do.call(rbind,lapply(data_list,function(x) x[names(posGR)[i],]))
       ref <- names(which(colSums(tmp)==max(colSums(tmp))))[1] #todo better way than choosig the first on event of tie
       hit <- res.sig[which(res.sig$groupID==names(posGR)[i]),]
-
+      
       #what happens if more than one hit for same location
       if(nrow(hit)>1)
       {
@@ -61,7 +61,7 @@ getHits <- function(res,stranded=F,fdr=0.1,fold=2,ncore=20,addMeta=TRUE,data_lis
           hit <- hit[order(hit$pvalue)[1],]
         }
       }
-
+      
       targ <-  gsub("E(.)","\\1",hit$featureID)
       #refGR[]
       padj <- hit$padj
@@ -69,30 +69,30 @@ getHits <- function(res,stranded=F,fdr=0.1,fold=2,ncore=20,addMeta=TRUE,data_lis
       par_control <- hit$control
       par_treat <- hit$treat
       fc <- hit$log2fold_treat_control
-
+      
       if(symm)
       {
         if(fc>0)
         {
           prop <- sum(tmp[which(design_vector=="treat"),targ]) / (sum(tmp[which(design_vector=="treat"),ref])+(sum(tmp[which(design_vector=="treat"),targ])))
           prop_control <- sum(tmp[which(design_vector=="control"),targ]) / (sum(tmp[which(design_vector=="treat"),ref])+(sum(tmp[which(design_vector=="treat"),targ])))
-
+          
         }else{
           prop <- sum(tmp[which(design_vector=="control"),targ]) / (sum(tmp[which(design_vector=="control"),ref])+(sum(tmp[which(design_vector=="control"),targ])))
           prop_control <- sum(tmp[which(design_vector=="treat"),targ]) / (sum(tmp[which(design_vector=="control"),ref])+(sum(tmp[which(design_vector=="control"),targ])))
         }
       }else{
-          prop <- sum(tmp[which(design_vector=="treat"),targ]) / (sum(tmp[which(design_vector=="treat"),ref])+(sum(tmp[which(design_vector=="treat"),targ])))
-          prop_control <- sum(tmp[which(design_vector=="control"),targ]) / (sum(tmp[which(design_vector=="control"),ref])+(sum(tmp[which(design_vector=="control"),targ])))
+        prop <- sum(tmp[which(design_vector=="treat"),targ]) / (sum(tmp[which(design_vector=="treat"),ref])+(sum(tmp[which(design_vector=="treat"),targ])))
+        prop_control <- sum(tmp[which(design_vector=="control"),targ]) / (sum(tmp[which(design_vector=="control"),ref])+(sum(tmp[which(design_vector=="control"),targ])))
       }
-
-
-
-
+      
+      
+      
+      
       edit_count <- unlist(lapply(data_list,function(x) x[names(posGR)[i],targ]))
       tags_control <- sum(edit_count[names(which(design_vector=="control"))])
       tags_treat <- sum(edit_count[names(which(design_vector=="treat"))])
-
+      
       data.frame("name"=names(posGR)[i],"ref"=ref,"targ"=targ,"prop"=prop,"prop_ctrl"=prop_control,"padj"=padj,"pvalue"=pval,"control_par"=par_control,"treat_par"=par_treat,"fold_change"=fc,"tags_treat"=tags_treat,"tags_control"=tags_control)
     }
   }
@@ -102,14 +102,14 @@ getHits <- function(res,stranded=F,fdr=0.1,fold=2,ncore=20,addMeta=TRUE,data_lis
     names(refGR) <- refGR$names
     meta$base <- as.vector(refGR[paste(my.chrs,my.pos,sep="_")]$ref)
   }
-
+  
   colnames(meta)[colnames(meta)=="strand"] <- "gtf_strand"
   mcols(posGR) <- meta
   posGR$ref <- as.vector(posGR$ref)
   posGR$targ <- as.vector(posGR$targ)
-
+  
   posGR <- posGR[!(posGR$ref==posGR$targ)]
-
+  
   return(posGR)
 }
 
@@ -149,11 +149,7 @@ handleAnoType <- function(x)
     print("stop")
   }
 }
-#add in gene annotations/information. Also expression information.
 
-###
-#
-#
 
 
 addGenes <- function(gtfGR,posGR,ncore=30,quant=quant.vec,assignStrand=F,geneids)
@@ -163,34 +159,34 @@ addGenes <- function(gtfGR,posGR,ncore=30,quant=quant.vec,assignStrand=F,geneids
   #CDS = gene - introns - UTRs
   #CDS = Exons - UTRs
   feature_names <- names(table(gtfGR$type))
-
+  
   #which(lapply(strsplit(posGR$genes[,1],","),function(x) length(x))==2)
   #which(lapply(strsplit(posGR$genes[,1],","),function(x) length(x))==0)
-
+  
   genes <- foreach(i=1:length(posGR)) %dopar%{
     #i <- sample(1:length(posGR),1)
     ols <- gtfGR[subjectHits(findOverlaps(posGR[i],gtfGR,ignore.strand=FALSE))]
     ofr_flag <- F
-
+    
     if(length(ols)==0)
     {
       ofr_flag <- T
       ols <- gtfGR[subjectHits(findOverlaps(posGR[i]+1000,gtfGR,ignore.strand=FALSE))]
     }
-
+    
     genes <- unique(ols$gene_id)
     strands <- tapply(as.vector(strand(ols)),ols$gene_id,function(x) x[1])
-
+    
     if(length(genes)>1)
     {
       gs <- rep(0,length(genes))
       for(q in 1:length(genes))
       {
-        gs[q] <- sum(quant[grep(genes[q],row.names(tpm.mat))])
+        gs[q] <- sum(quant[grep(genes[q],names(quant.vec))])
       }
       genes <- genes[rev(order(gs))]
       strands <- (strands[rev(order(gs))])
-
+      
       gep <- rep(0,length(genes))
       names(gep) <- genes
       for(ge in 1:length(genes)){
@@ -206,26 +202,26 @@ addGenes <- function(gtfGR,posGR,ncore=30,quant=quant.vec,assignStrand=F,geneids
       }
       ols <- ols[(ols$gene_id %in% genes),]
     }
-
+    
     #strands <- unique(strands)
     feature_type <- as.vector(ols$type)
     names(feature_type) <- ols$transcript_id
     feature_type <- tapply(feature_type,names(feature_type),handleAnoType)
     transcripts <- names(feature_type)
-
-
+    
+    
     if(length(strands)>0)
     {
       new_strand <- strands[1]
     }else{
       new_strand <- "*"
     }
-
-
-
+    
+    
+    
     tquant <- transcripts[transcripts %in% names(quant)]
     #length(tquant)
-
+    
     if(length(tquant)==1)
     {
       qmat <- quant[tquant]
@@ -260,8 +256,8 @@ addGenes <- function(gtfGR,posGR,ncore=30,quant=quant.vec,assignStrand=F,geneids
         }
       }
     }
-
-
+    
+    
     if(length(ols)>0 & !(new_strand=="*"))
     {
       pifv <- c()
@@ -282,15 +278,15 @@ addGenes <- function(gtfGR,posGR,ncore=30,quant=quant.vec,assignStrand=F,geneids
       names(pifv) <- names(feature_type)
       #print(pifv)
       #feature_vec <- point_in_feature
-
+      
       #feature_span <- max(end(fR)) - min(start(fR))
       #names(point_in_feature) <- feature_type
       #  feature_points <- tapply(point_in_feature[names(transcript_expr[1])],feature_type[1],mean)
       #  feature_vector <- rep(NA,length(feature_names))
       #  names(feature_vector) <- feature_names
       #  feature_vector[names(feature_points)] <- feature_points
-
-
+      
+      
     }else{
       #feature_span <- NA
       #feature_vector <- rep(NA,length(feature_names))
@@ -299,18 +295,18 @@ addGenes <- function(gtfGR,posGR,ncore=30,quant=quant.vec,assignStrand=F,geneids
       pifv <- rep(NA,length(feature_type))
       names(pifv) <- names(feature_type)
     }
-
+    
     gene.names <- geneids[as.vector(genes)]
     df<- c("genes"=paste(genes,collapse=","),"names"=paste(gene.names,collapse=","),"strand"=paste(strands,collapse=","),"transcripts"=paste(transcripts,collapse=","),"transcript.tpm"=paste(transcript_expr,collapse=","),"transcript.types"=paste(feature_type,collapse=","),"out_of_range"=ofr_flag)
     fdf <- c("fprop"=paste(round(pifv,4),collapse=","))
     #print(unlist(c(df[3],fdf)))
     list(df,fdf,new_strand)
-
+    
   }
   genes.info <- do.call(rbind,lapply(genes,function(x) x[[1]]))
   feature.locations <- do.call(rbind,lapply(genes,function(x) x[[2]]))
-
-
+  
+  
   posGR$gene <- genes.info[,"genes"]
   posGR$name <- genes.info[,"names"]
   posGR$gtf_strand <- genes.info[,"strand"]
@@ -318,21 +314,22 @@ addGenes <- function(gtfGR,posGR,ncore=30,quant=quant.vec,assignStrand=F,geneids
   posGR$transcript.tpm <- genes.info[,"transcript.tpm"]
   posGR$transcript.types <- genes.info[,"transcript.types"]
   posGR$out_of_range <- genes.info[,"out_of_range"]
-
-
+  
+  
   #posGR$feature_type <- feature.locations[,"ftype"]
   posGR$feature_prop <- feature.locations[,"fprop"]
-
-
-
+  
+  
+  
   if(assignStrand)
   {
     strands.vec <- do.call(rbind,lapply(genes,function(x) x[[3]]))
     strand(posGR) <- strands.vec
   }
-
+  
   return(posGR)
 }
+
 
 plotExample <- function(data_list,name="",random=T,give_ref=T,refGR=locsGR)
 {
