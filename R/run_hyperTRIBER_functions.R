@@ -25,11 +25,11 @@ extractCountData <- function(dat,samp.names,stranded=F)
       print(c(sum(data.samp[,1:4],na.rm=T)/sum(data.samp[,5:8],na.rm=T)))
       #we swap a<->t and c<->g to ensure the correct base name on the negative strand:
       data.samp <- data.frame(rbind(data.samp[,1:4],data.samp[,c("t","a","g","c")]))
-
+      
       row.names(data.samp) <- paste(rep(dat[,1],times=2),"_",rep(dat[,2],times=2),rep(c(",+",",-"),each=nrow(dat)),sep="")
-
+      
       data.list[[paste(samp.names[[i]])]] <- data.samp
-
+      
       #suppressWarnings(class(data_list[[i]]) <- "numeric")
       to_rm[[i]] <- which(is.na(data.list[[i]]),arr.ind=T)[,1]
     }
@@ -40,22 +40,23 @@ extractCountData <- function(dat,samp.names,stranded=F)
       data.samp <- (as.matrix(dat[,3+c((i*4-3):(i*4))]))
       colnames(data.samp) <- c("A","T","C","G")
       row.names(data.samp) <- paste(dat[,1],dat[,2],sep="_")
-
+      
       data.list[[paste(samp.names[[i]])]] <- data.samp
-
+      
       #suppressWarnings(class(data_list[[i]]) <- "numeric")
       to_rm[[i]] <- which(is.na(data.list[[i]]),arr.ind=T)[,1]
     }
   }
-
+  
   to.rm <- unique(unlist(to_rm))
   if(length(to.rm)>0)
   {
     data.list <- lapply(data.list,function(x) x[-to.rm,])
   }
-
+  
   return(data.list)
 }
+
 
 ###############################################################################
 ###############################################################################
@@ -294,84 +295,43 @@ make_test <- function(out_dir,design_vector=c(rep("control",5),rep("treat",5)),n
 ###############################################################################
 ###############################################################################
 
-make_test_ADAR <- function(out_dir,design_vector=c(rep("control",5),rep("treat",5)),ncores=1,adar.vec=rep(1,10))
+make_test_ADAR <- function(out_dir, design_vector = c(rep("control", 5), rep("treat",5)), ncores = 1, adar.vec = rep(1, 10)) 
 {
   inDir <- out_dir
-  countFiles = list.files(inDir, pattern="counts*", full.names=TRUE)
-  #countFiles <- countFiles #remove rep 3 in ECT2 roots
-  #print(basename(countFiles))
-  flattenedFile = list.files(inDir, pattern="gff$", full.names=TRUE)
+  countFiles = list.files(inDir, pattern = "counts*", full.names = TRUE)
+  flattenedFile = list.files(inDir, pattern = "gff$", full.names = TRUE)
   print(basename(flattenedFile))
+  sampleTable = data.frame(row.names = c(paste("control", 1:length(which(design_vector == "control")), sep = "_"), paste("treat", 1:length(which(design_vector == "treat")), sep = "_")), condition = design_vector, adar = (adar.vec))
 
-  sampleTable = data.frame(
-    row.names = c(paste("control",1:length(which(design_vector=="control")),sep="_"),paste("treat",1:length(which(design_vector=="treat")),sep="_")),
-    condition =  design_vector,
-    adar = as.numeric(adar.vec)
-  )
-
-  ## ----displaySampleTable----------------------------------------------------
-  #sampleTable
-
+  formulaFullModel = ~sample + exon + condition:exon + adar:exon
+  formulaReducedModel = ~sample + exon + adar:exon
+  
   print("running model")
-
-  ## ----makeecs, eval=TRUE----------------------------------------------------
-
-  if(exists("dxd")){
+  if (exists("dxd")) {
     rm(dxd)
   }
-
   print("create dxd")
-
-  dxd = DEXSeqDataSetFromHTSeq(
-    countFiles,
-    sampleData=sampleTable,
-    design= ~ sample + exon + condition:exon + adar:exon  + adar:condition:exon,
-    #design= ~ sample + exon + condition:exon + adar:exon,
-    flattenedfile=flattenedFile )
-
-  ## ----sizeFactors1----------------------------------------------------------
+  dxd = DEXSeq::DEXSeqDataSetFromHTSeq(countFiles, sampleData = sampleTable, 
+                               design = formulaFullModel, flattenedfile = flattenedFile)
   print("get size factors")
-
-  dxd = estimateSizeFactors( dxd )
-
-  BPPARAM = MulticoreParam(workers=ncores)
-  ## ----estDisp1--------------------------------------------------------------
-
-
-  # formulaFullModel    =  ~ sample + exon + adar:exon + condition:exon
-  # formulaReducedModel =  ~ sample + exon + adar:exon
-
-  formulaFullModel    =  ~ sample + exon + condition:exon + adar:exon + adar:condition:exon
-  formulaReducedModel =  ~ sample + exon + adar:exon
+  dxd = DEXSeq::estimateSizeFactors(dxd)
+  BPPARAM = MulticoreParam(workers = ncores)
 
   print("estimate dispersion")
-  dxd = estimateDispersions( dxd ,fitType="local",BPPARAM=BPPARAM,formula = formulaFullModel)
-
-  ## ----testForDEU1,cache=TRUE------------------------------------------------
+  dxd = DEXSeq::estimateDispersions(dxd, fitType = "local", BPPARAM = BPPARAM, 
+                            formula = formulaFullModel)
   print("test for DEU")
-
-
-  #formulaFullModel    =  ~ sample + exon + adar + condition:exon
-  #formulaReducedModel =  ~ sample + exon + adar
-
-  dxd = testForDEU( dxd ,BPPARAM=BPPARAM,fullModel = formulaFullModel,reducedModel = formulaReducedModel)
-
-  ## ----estFC,cache=TRUE------------------------------------------------------
+  dxd = DEXSeq::testForDEU(dxd, BPPARAM = BPPARAM, fullModel = formulaFullModel, 
+                   reducedModel = formulaReducedModel)
   print("estimate fold changes")
-  dxd = estimateExonFoldChanges( dxd, fitExpToVar="condition",BPPARAM=BPPARAM)
-
+  dxd = DEXSeq::estimateExonFoldChanges(dxd, fitExpToVar = "condition",BPPARAM = BPPARAM)
+  
   print("returning output")
-
-  res <- DEXSeqResults(dxd)
-
+  res <- DEXSeq::DEXSeqResults(dxd)
   print("saving to out directory")
-  save(res,file=paste0(out_dir,"/dxd_results.Rdat"))
+  save(res, file = paste0(out_dir, "/dxd_results.Rdat"))
   return(res)
 }
-
-
-
-
 
 
 
