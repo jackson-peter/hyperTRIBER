@@ -234,106 +234,58 @@ make_test <- function(out_dir,design_vector=c(rep("control",5),rep("treat",5)),n
   #print(basename(countFiles))
   flattenedFile = list.files(inDir, pattern="gff$", full.names=TRUE)
   print(basename(flattenedFile))
-
+  
   sampleTable = data.frame(
     row.names = c(paste("control",1:length(which(design_vector=="control")),sep="_"),paste("treat",1:length(which(design_vector=="treat")),sep="_")),
     condition =  design_vector
   )
-
+  
   ## ----displaySampleTable----------------------------------------------------
   #sampleTable
-
+  
   print("running model")
-
+  
   ## ----makeecs, eval=TRUE----------------------------------------------------
-
+  
   if(exists("dxd")){
     rm(dxd)
   }
-
+  
   print("create dxd")
-
-  dxd = DEXSeqDataSetFromHTSeq(
+  
+  dxd = DEXSeq::DEXSeqDataSetFromHTSeq(
     countFiles,
     sampleData=sampleTable,
     design= ~ sample + exon + condition:exon,
     flattenedfile=flattenedFile )
-
+  
   ## ----sizeFactors1----------------------------------------------------------
   print("get size factors")
-
-  dxd = estimateSizeFactors( dxd )
-
+  
+  dxd = DEXSeq::estimateSizeFactors( dxd )
+  
   BPPARAM = MulticoreParam(workers=ncores)
   ## ----estDisp1--------------------------------------------------------------
-
+  
   print("estimate dispersion")
-  dxd = estimateDispersions( dxd ,fitType="local",BPPARAM=BPPARAM)
-
+  dxd = DEXSeq::estimateDispersions( dxd ,fitType="local",BPPARAM=BPPARAM)
+  
   ## ----testForDEU1,cache=TRUE------------------------------------------------
   print("test for DEU")
-  dxd = testForDEU( dxd ,BPPARAM=BPPARAM)
-
+  dxd = DEXSeq::testForDEU( dxd ,BPPARAM=BPPARAM)
+  
   ## ----estFC,cache=TRUE------------------------------------------------------
   print("estimate fold changes")
-  dxd = estimateExonFoldChanges( dxd, fitExpToVar="condition",BPPARAM=BPPARAM)
-
+  dxd = DEXSeq::estimateExonFoldChanges( dxd, fitExpToVar="condition",BPPARAM=BPPARAM)
+  
   print("returning output")
-
-  res <- DEXSeqResults(dxd)
-
+  
+  res <- DEXSeq::DEXSeqResults(dxd)
+  
   print("saving to out directory")
   save(res,file=paste0(out_dir,"/dxd_results.Rdat"))
   return(res)
 }
-
-
-
-###############################################################################
-###############################################################################
-####MAKE TEST ACCOUNTING FOR ADAR##############################################
-###############################################################################
-###############################################################################
-
-make_test_ADAR <- function(out_dir, design_vector = c(rep("control", 5), rep("treat",5)), ncores = 1, adar.vec = rep(1, 10)) 
-{
-  inDir <- out_dir
-  countFiles = list.files(inDir, pattern = "counts*", full.names = TRUE)
-  flattenedFile = list.files(inDir, pattern = "gff$", full.names = TRUE)
-  print(basename(flattenedFile))
-  sampleTable = data.frame(row.names = c(paste("control", 1:length(which(design_vector == "control")), sep = "_"), paste("treat", 1:length(which(design_vector == "treat")), sep = "_")), condition = design_vector, adar = (adar.vec))
-
-  formulaFullModel = ~sample + exon + condition:exon + adar:exon
-  formulaReducedModel = ~sample + exon + adar:exon
-  
-  print("running model")
-  if (exists("dxd")) {
-    rm(dxd)
-  }
-  print("create dxd")
-  dxd = DEXSeq::DEXSeqDataSetFromHTSeq(countFiles, sampleData = sampleTable, 
-                               design = formulaFullModel, flattenedfile = flattenedFile)
-  print("get size factors")
-  dxd = DEXSeq::estimateSizeFactors(dxd)
-  BPPARAM = MulticoreParam(workers = ncores)
-
-  print("estimate dispersion")
-  dxd = DEXSeq::estimateDispersions(dxd, fitType = "local", BPPARAM = BPPARAM, 
-                            formula = formulaFullModel)
-  print("test for DEU")
-  dxd = DEXSeq::testForDEU(dxd, BPPARAM = BPPARAM, fullModel = formulaFullModel, 
-                   reducedModel = formulaReducedModel)
-  print("estimate fold changes")
-  dxd = DEXSeq::estimateExonFoldChanges(dxd, fitExpToVar = "condition",BPPARAM = BPPARAM)
-  
-  print("returning output")
-  res <- DEXSeq::DEXSeqResults(dxd)
-  print("saving to out directory")
-  save(res, file = paste0(out_dir, "/dxd_results.Rdat"))
-  return(res)
-}
-
-
 
 
 ###############################################################################
