@@ -133,7 +133,7 @@ generateCountFiles <- function(data_list,stranded=F,names_vec=row.names(data_lis
 {
   print("getting ccounts")
   counts <- list()
-
+  
   for(i in 1:length(data_list))
   {
     ccounts <- data_list[[i]]
@@ -146,30 +146,30 @@ generateCountFiles <- function(data_list,stranded=F,names_vec=row.names(data_lis
     row.names(counts.c1) <- paste(rep(my.names,each=4),(factor(edit.rest.melt$Var1)),sep=":")
     counts[[i]] <- counts.c1
   }
-
+  
   names(counts) <- names(data_list)
-
-
+  
+  
   print("saving ccounts")
-
+  
   for(i in 1:length(which(design_vector=="treat")))
   {
     k <- which(design_vector=="treat")[i]
     counts.c1 <- counts[[k]]
     write.table(counts.c1,paste0(out_dir,"/countsTreat",i,".txt"),col.names=F,row.names = T,quote=F,sep="\t")
   }
-
+  
   for(i in 1:length(which(design_vector=="control")))
   {
     k <- which(design_vector=="control")[i]
     counts.c1 <- counts[[k]]
     write.table(counts.c1,paste0(out_dir,"/countsControl",i,".txt"),col.names=F,row.names = T,quote=F,sep="\t")
   }
-
-
-
+  
+  
+  
   print("writing annotation")
-
+  
   if(stranded)
   {
     mychr <- gsub("(.*)_[0-9]+,[+|-]:[A|T|C|G]","\\1",row.names(counts.c1))
@@ -188,10 +188,10 @@ generateCountFiles <- function(data_list,stranded=F,names_vec=row.names(data_lis
     myexon <- as.vector((gsub(".*:([A|T|C|G])","\\1",row.names(counts.c1))))
     head(myexon)
   }
-
-
+  
+  
   #print(table(tapply(myexon,paste(mychr,mypos),length)))
-
+  
   myname <- as.vector(row.names(counts.c1))
   #head(myname)
   myv3 <- "exonic_part"
@@ -213,9 +213,9 @@ generateCountFiles <- function(data_list,stranded=F,names_vec=row.names(data_lis
   newagg <- data.frame(mychr,myname,myv3,myv4,myv5,myv6,myv7,myv8,myv9)
   #head(newagg)
   write.table(newagg,paste(out_dir,"/annotation_file_made_up_for_DEXSeq.gff",sep=""),col.names=F,row.names=F,quote=F,sep="\t")
-
+  
   print(paste("successfully written counts and annotations to",out_dir))
-
+  
 }
 
 
