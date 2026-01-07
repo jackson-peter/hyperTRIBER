@@ -63,7 +63,7 @@ extractCountData <- function(dat,samp.names,stranded=F)
 ###############################################################################
 ###############################################################################
 
-restrict_data <- function(data_list, ref_base,design_vector, min_samp_treat = 3, min_count = 2, both_ways=F,edits_of_interest = rbind(c("A", "G"), c("T", "C")))
+restrict_data <- function(data_list, ref_base = NULL,design_vector, min_samp_treat = 3, min_count = 2, min_prop=0.01,both_ways=F,edits_of_interest = rbind(c("A", "G"), c("T", "C")))
 {
   cont_counts <- list()
   cont_counts[["A"]] <- do.call(cbind, lapply(data_list[design_vector == 
@@ -83,26 +83,41 @@ restrict_data <- function(data_list, ref_base,design_vector, min_samp_treat = 3,
                                                            "treat"], function(x) x[, "C"]))
   treat_counts[["G"]] <- do.call(cbind, lapply(data_list[design_vector == 
                                                            "treat"], function(x) x[, "G"]))
-  depth <- rowSums(do.call(cbind, lapply(data_list[design_vector == 
-                                                     "control"], rowSums)))
+  
+  
+  
+  #dom_df <- data.frame("A"=rowSums(cont_counts[["A"]]),"T"=rowSums(cont_counts[["T"]]),"C"=rowSums(cont_counts[["C"]]),"G"=rowSums(cont_counts[["G"]]))
+  #dom_base <-  c("A","T","C","G")[apply(dom_df,1,function(x) which.max(x)[1])]
+  dom_base <- ref_base
+  
   tokeep_list <- list()
   for (i in 1:nrow(edits_of_interest)) {
     my_ref <- edits_of_interest[i, 1]
     my_targ <- edits_of_interest[i, 2]
-    #is_max <- rowSums(cont_counts[[my_ref]])/depth > 0.5
+    
+    prop_treat <-  rowSums(treat_counts[[my_targ]])/( rowSums(treat_counts[[my_targ]]) +  rowSums(treat_counts[[my_ref]]))
+    prop_control <-  rowSums(cont_counts[[my_targ]])/( rowSums(cont_counts[[my_targ]]) +  rowSums(cont_counts[[my_ref]]))
+    prop_treat[is.nan(prop_treat)] <- 0
+    prop_control[is.nan(prop_control)] <- 0
+    
     if(!both_ways)
     {
-      tokeep_treat <- rowSums(treat_counts[[my_targ]] >= min_count) >= min_samp_treat
-      tokeep_list[[i]] <- tokeep_treat
+      tokeep_treat <- rowSums(treat_counts[[my_targ]] >= 0) >= min_samp_treat
+      count_treat <- rowSums(treat_counts[[my_targ]])
+      tokeep_list[[i]] <- tokeep_treat & (count_treat>=min_count) & !(dom_base==my_targ)
     }else{
-      tokeep_treat <- rowSums(treat_counts[[my_targ]] >= min_count) >= min_samp_treat
-      tokeep_control_targ <- rowSums(cont_counts[[my_targ]] >= min_count) >= min_samp_treat
-      tokeep_list[[i]] <- (tokeep_treat | tokeep_control_targ) & !(ref_base==my_targ)
+      tokeep_treat <- rowSums(treat_counts[[my_targ]] >= 0) >= min_samp_treat
+      tokeep_control_targ <- rowSums(cont_counts[[my_targ]] >= 0) >= min_samp_treat
+      count_treat <- rowSums(treat_counts[[my_targ]])
+      count_control <- rowSums(cont_counts[[my_targ]])
+      tokeep_list[[i]] <- !(dom_base==my_targ) & ( (tokeep_treat & (count_treat >= min_count) & (prop_treat > min_prop) ) | (tokeep_control_targ  & (count_control>= min_count) & (prop_control > min_prop) )  ) 
     }
   }
   
-  to_keep <- rowSums(do.call(cbind, tokeep_list)) > 0
+  use_table <- do.call(cbind, tokeep_list)
+  to_keep <- rowSums(use_table) > 0
   data_list <- lapply(data_list, function(x) x[which(to_keep),])
+  
   return(data_list)
 }
 
